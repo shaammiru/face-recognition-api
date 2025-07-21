@@ -1,14 +1,23 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, HTTPException
 from datetime import datetime
 from deepface import DeepFace
-import numpy as np
 from PIL import Image
+import numpy as np
 import io
+import psycopg2
+
+DB_CONN = psycopg2.connect(
+    host="localhost",
+    port=5432,
+    database="faces_db",
+    user="postgres",
+    password="password",
+)
 
 app = FastAPI()
 
-model_name = "SFace"
-backend_detector = "opencv"
+MODEL_NAME = "SFace"
+DETECTOR = "opencv"
 
 
 @app.get("/")
@@ -24,52 +33,63 @@ async def health_check():
     }
 
 
-@app.post("/recognize")
+@app.post("/recognize", status_code=200)
 async def recognize_face(file: UploadFile):
-    """
-    Endpoint to handle face recognition requests
-    """
-    # convert img to numpy array
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     img_array = np.array(image)
 
-    dfs = DeepFace.find(
-        img_path=img_array,
-        db_path="faces",
-        model_name=model_name,
-        detector_backend=backend_detector,
-        align=True,
-    )
-
-    print(dfs)
-
     embedding = DeepFace.represent(
         img_path=img_array,
-        model_name=model_name,
-        detector_backend=backend_detector,
-        align=True,
+        model_name=MODEL_NAME,
+        detector_backend=DETECTOR,
+        enforce_detection=True,
     )[0]["embedding"]
 
-    print(f"Embedding: {len(embedding)}")
+    with DB_CONN.cursor() as cur:
+        vector_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+        cur.execute(
+            """
+            SELECT name, embedding <#> %s AS distance
+            FROM faces
+            ORDER BY embedding <#> %s
+            LIMIT 1;
+        """,
+            (vector_str, vector_str),
+        )
+
+        result = cur.fetchone()
+
+    if result:
+        name, distance = result
+
+        if distance > 0.5:
+            return {"status": "success", "match": name, "distance": round(distance, 4)}
+    else:
+        raise HTTPException(status_code=404, detail="No matching face found.")
+
+
+@app.post("/register", status_code=201)
+async def register_face(file: UploadFile, name: str):
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents)).convert("RGB")
+    img_array = np.array(image)
+
+    result = DeepFace.represent(
+        img_path=img_array,
+        model_name=MODEL_NAME,
+        detector_backend=DETECTOR,
+        enforce_detection=True,
+    )[0]["embedding"]
+
+    with DB_CONN.cursor() as cur:
+        cur.execute(
+            "INSERT INTO faces (name, embedding) VALUES (%s, %s)", (name, result)
+        )
+        DB_CONN.commit()
 
     return {
         "status": "success",
-        "message": "Face recognition functionality is not yet implemented.",
-        "file_name": file.filename,
-    }
-
-
-@app.post("/register")
-async def register_face(file: UploadFile):
-    """
-    Endpoint to handle face registration requests
-    """
-    print(f"{file.size / 1024:.2f} KB")
-    print(file.content_type)
-
-    return {
-        "status": "success",
-        "message": "Face registration functionality is not yet implemented.",
-        "file_name": file.filename,
+        "message": "Face registered successfully.",
     }
