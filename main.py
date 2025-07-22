@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, HTTPException, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from deepface import DeepFace
 from PIL import Image
 import numpy as np
@@ -15,6 +16,14 @@ DB_CONN = psycopg2.connect(
 )
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MODEL_NAME = "SFace"
 DETECTOR = "opencv"
@@ -109,7 +118,7 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
         img_path=img_array,
         model_name=MODEL_NAME,
         detector_backend=DETECTOR,
-        enforce_detection=True,
+        enforce_detection=False,
     )[0]["embedding"]
 
     result = np.array(result)
