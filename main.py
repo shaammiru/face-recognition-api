@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, File, Form
 from datetime import datetime
 from deepface import DeepFace
 from PIL import Image
@@ -46,6 +46,11 @@ async def recognize_face(file: UploadFile):
         enforce_detection=True,
     )[0]["embedding"]
 
+    embedding = np.array(embedding)
+    norm = np.linalg.norm(embedding)
+    if norm != 0:
+        embedding = embedding / norm
+
     with DB_CONN.cursor() as cur:
         vector_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
@@ -64,14 +69,20 @@ async def recognize_face(file: UploadFile):
     if result:
         name, distance = result
 
-        if distance > 0.5:
-            return {"status": "success", "match": name, "distance": round(distance, 4)}
-    else:
-        raise HTTPException(status_code=404, detail="No matching face found.")
+        print(distance)
+
+        if distance < -0.6:
+            return {"status": "success", "match": name, "distance": round(distance, 3)}
+
+        raise HTTPException(
+            status_code=404, detail="No matching face found with sufficient confidence."
+        )
+
+    raise HTTPException(status_code=404, detail="No matching face found.")
 
 
 @app.post("/register", status_code=201)
-async def register_face(file: UploadFile, name: str):
+async def register_face(file: UploadFile = File(...), name: str = Form(...)):
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     img_array = np.array(image)
@@ -83,9 +94,16 @@ async def register_face(file: UploadFile, name: str):
         enforce_detection=True,
     )[0]["embedding"]
 
+    result = np.array(result)
+    norm = np.linalg.norm(result)
+
+    if norm != 0:
+        result = result / norm
+
     with DB_CONN.cursor() as cur:
         cur.execute(
-            "INSERT INTO faces (name, embedding) VALUES (%s, %s)", (name, result)
+            "INSERT INTO faces (name, embedding) VALUES (%s, %s)",
+            (name, result.tolist()),
         )
         DB_CONN.commit()
 
