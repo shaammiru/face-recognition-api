@@ -22,15 +22,45 @@ DETECTOR = "opencv"
 
 @app.get("/")
 async def health_check():
-    """
-    Health check endpoint to verify if the API is running properly
-    """
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "FastAPI Health Check",
         "version": "1.0.0",
     }
+
+
+@app.get("/faces")
+async def list_faces():
+    with DB_CONN.cursor() as cur:
+        cur.execute("SELECT id, name, embedding FROM faces;")
+        rows = cur.fetchall()
+
+    faces = []
+    for row in rows:
+        face_id, name, embedding = row
+        faces.append(
+            {
+                "id": face_id,
+                "name": name,
+                "embedding_length": len(embedding) if embedding else 0,
+            }
+        )
+
+    return {"faces": faces}
+
+
+@app.delete("/faces/{face_id}")
+async def delete_face(face_id: int):
+    with DB_CONN.cursor() as cur:
+        cur.execute("SELECT * FROM faces WHERE id = %s;", (face_id,))
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Face not found.")
+
+        cur.execute("DELETE FROM faces WHERE id = %s;", (face_id,))
+        DB_CONN.commit()
+
+    return {"status": "success", "message": f"Face with id {face_id} deleted."}
 
 
 @app.post("/recognize", status_code=200)
@@ -60,17 +90,13 @@ async def recognize_face(file: UploadFile):
             FROM faces
             ORDER BY embedding <#> %s
             LIMIT 1;
-        """,
+            """,
             (vector_str, vector_str),
         )
-
         result = cur.fetchone()
 
     if result:
         name, distance = result
-
-        print(distance)
-
         if distance < -0.6:
             return {"status": "success", "match": name, "distance": round(distance, 3)}
 
