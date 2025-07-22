@@ -1,10 +1,10 @@
 from fastapi import FastAPI, UploadFile, HTTPException, File, Form
-from datetime import datetime
 from deepface import DeepFace
 from PIL import Image
 import numpy as np
 import io
 import psycopg2
+import base64
 
 DB_CONN = psycopg2.connect(
     host="localhost",
@@ -20,30 +20,21 @@ MODEL_NAME = "SFace"
 DETECTOR = "opencv"
 
 
-@app.get("/")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "FastAPI Health Check",
-        "version": "1.0.0",
-    }
-
-
 @app.get("/faces")
 async def list_faces():
     with DB_CONN.cursor() as cur:
-        cur.execute("SELECT id, name, embedding FROM faces;")
+        cur.execute("SELECT id, name, embedding, image_base FROM faces;")
         rows = cur.fetchall()
 
     faces = []
     for row in rows:
-        face_id, name, embedding = row
+        face_id, name, embedding, image_base = row
         faces.append(
             {
                 "id": face_id,
                 "name": name,
                 "embedding_length": len(embedding) if embedding else 0,
+                "image_base": image_base,
             }
         )
 
@@ -110,6 +101,7 @@ async def recognize_face(file: UploadFile):
 @app.post("/register", status_code=201)
 async def register_face(file: UploadFile = File(...), name: str = Form(...)):
     contents = await file.read()
+    image_base64 = base64.b64encode(contents).decode("utf-8")
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     img_array = np.array(image)
 
@@ -128,8 +120,8 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
 
     with DB_CONN.cursor() as cur:
         cur.execute(
-            "INSERT INTO faces (name, embedding) VALUES (%s, %s)",
-            (name, result.tolist()),
+            "INSERT INTO faces (name, embedding, image_base) VALUES (%s, %s, %s)",
+            (name, result.tolist(), image_base64),
         )
         DB_CONN.commit()
 
