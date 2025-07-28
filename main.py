@@ -73,7 +73,7 @@ async def recognize_face(file: UploadFile):
         img_path=img_array,
         model_name=MODEL_NAME,
         detector_backend=DETECTOR,
-        enforce_detection=True,
+        enforce_detection=False,
     )[0]["embedding"]
 
     embedding = np.array(embedding)
@@ -97,7 +97,7 @@ async def recognize_face(file: UploadFile):
 
     if result:
         name, distance = result
-        if distance < -0.6:
+        if distance < -0.5:
             return {"status": "success", "match": name, "distance": round(distance, 3)}
 
         raise HTTPException(
