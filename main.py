@@ -109,7 +109,10 @@ async def recognize_face(file: UploadFile):
             return {"status": "success", "match": name, "distance": round(distance, 3)}
 
         raise HTTPException(
-            status_code=404, detail="No matching face found with sufficient confidence."
+            status_code=404,
+            detail="No matching face found with sufficient confidence, distance: {:.3f}".format(
+                distance
+            ),
         )
 
     raise HTTPException(status_code=404, detail="No matching face found.")
