@@ -4,6 +4,7 @@ from deepface import DeepFace
 from PIL import Image
 import numpy as np
 import io
+import os
 import psycopg2
 import base64
 
@@ -69,6 +70,13 @@ async def recognize_face(file: UploadFile):
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     img_array = np.array(image)
 
+    # store image to folder as log, make sure the folder exists
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+
+    img_path = f"logs/{file.filename}"
+    image.save(img_path)
+
     embedding = DeepFace.represent(
         img_path=img_array,
         model_name=MODEL_NAME,
@@ -97,7 +105,7 @@ async def recognize_face(file: UploadFile):
 
     if result:
         name, distance = result
-        if distance < -0.5:
+        if distance < -0.4:
             return {"status": "success", "match": name, "distance": round(distance, 3)}
 
         raise HTTPException(
