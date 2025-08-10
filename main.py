@@ -41,6 +41,11 @@ MODELS = [
 ]
 DETECTOR = "opencv"
 
+# print all models embedding size
+for model in MODELS:
+    embedding_size = DeepFace.build_model(model).output_shape[1]
+    print(f"Model: {model}, Embedding Size: {embedding_size}")
+
 
 @app.get("/faces")
 async def list_faces():
