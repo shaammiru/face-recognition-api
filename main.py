@@ -92,10 +92,12 @@ async def recognize_face(file: UploadFile):
 
     embedding = DeepFace.represent(
         img_path=img_array,
-        model_name=MODELS[0],
+        model_name=MODELS[1],
         detector_backend=DETECTOR,
         enforce_detection=False,
     )[0]["embedding"]
+
+    print(f"Embedding size: {len(embedding)}")
 
     embedding = np.array(embedding)
     norm = np.linalg.norm(embedding)
@@ -145,7 +147,7 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
 
     result = DeepFace.represent(
         img_path=img_array,
-        model_name=MODELS[0],
+        model_name=MODELS[1],
         detector_backend=DETECTOR,
         enforce_detection=False,
     )[0]["embedding"]
