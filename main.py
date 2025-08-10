@@ -138,7 +138,7 @@ async def recognize_face(file: UploadFile):
         rep = DeepFace.represent(
             img_path=img_array,
             model_name=MODELS[7],
-            detector_backend=BACKENDS[3],
+            detector_backend=BACKENDS[5],
             normalization="ArcFace",
             enforce_detection=False,
         )
@@ -199,7 +199,7 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
         rep = DeepFace.represent(
             img_path=img_array,
             model_name=MODELS[7],
-            detector_backend=BACKENDS[3],
+            detector_backend=BACKENDS[5],
             normalization="ArcFace",
             enforce_detection=False,
         )
