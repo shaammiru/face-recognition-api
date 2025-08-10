@@ -7,6 +7,7 @@ import io
 import os
 import psycopg2
 import base64
+import time
 
 DB_CONN = psycopg2.connect(
     host="localhost",
@@ -26,7 +27,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_NAME = "SFace"
+MODELS = [
+    "Dlib",
+    "SFace",
+    "OpenFace",
+    "Facenet",
+    "GhostFaceNet",
+    "DeepID",
+    "Facenet512",
+    "ArcFace",
+    "VGG-Face",
+    "DeepFace",
+]
 DETECTOR = "opencv"
 
 
@@ -70,16 +82,17 @@ async def recognize_face(file: UploadFile):
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     img_array = np.array(image)
 
-    # store image to folder as log, make sure the folder exists
     if not os.path.exists("logs"):
         os.makedirs("logs")
 
     img_path = f"logs/{file.filename}"
     image.save(img_path)
 
+    start_time = time.time()
+
     embedding = DeepFace.represent(
         img_path=img_array,
-        model_name=MODEL_NAME,
+        model_name=MODELS[0],
         detector_backend=DETECTOR,
         enforce_detection=False,
     )[0]["embedding"]
@@ -101,10 +114,15 @@ async def recognize_face(file: UploadFile):
             """,
             (vector_str, vector_str),
         )
+
         result = cur.fetchone()
 
     if result:
         name, distance = result
+
+        time_taken = time.time() - start_time
+        print(f"Recognition took {time_taken:.2f} seconds.")
+
         if distance < -0.4:
             return {"status": "success", "match": name, "distance": round(distance, 3)}
 
@@ -127,10 +145,12 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
 
     result = DeepFace.represent(
         img_path=img_array,
-        model_name=MODEL_NAME,
+        model_name=MODELS[0],
         detector_backend=DETECTOR,
         enforce_detection=False,
     )[0]["embedding"]
+
+    print(f"Embedding size: {len(result)}")
 
     result = np.array(result)
     norm = np.linalg.norm(result)
